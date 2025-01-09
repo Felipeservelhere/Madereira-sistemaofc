@@ -564,6 +564,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         """Delete the selected client."""
         self.clientes = [cliente for cliente in self.clientes if cliente["nome"] != client_name]
         self.salvar_dados()
+        self.atualizar_combobox_clientes()  # Update the client combo box after deletion
 
     def adicionar_produto(self):
         descricao = self.produto_desc.text()
@@ -629,6 +630,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         self.cliente_telefone.clear()
 
         self.salvar_dados()
+        self.atualizar_combobox_clientes()  # Update the client combo box after adding
         QtWidgets.QMessageBox.information(self, "Sucesso", "Cliente adicionado com sucesso!")
 
     def adicionar_produto_orcamento(self):
