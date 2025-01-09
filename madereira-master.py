@@ -388,10 +388,9 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         self.radio_cnpj.toggled.connect(self.update_document_placeholder)
 
     def validate_name_input(self):
-        """Remove any non-alphabetic characters from the name input."""
+        """Allow spaces in the name input."""
         current_text = self.cliente_nome.text()
-        filtered_text = ''.join(filter(str.isalpha, current_text))  # Keep only letters
-        self.cliente_nome.setText(filtered_text)  # Update the line edit with filtered text
+        self.cliente_nome.setText(current_text)  # No filtering, allow spaces
 
     def validate_cpf_input(self):
         """Remove any non-numeric characters from the CPF input."""
@@ -594,7 +593,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.warning(self, "Erro", "Preencha todos os campos para adicionar um cliente!")
             return
 
-        # Validate name (no numbers or symbols, but allow spaces)
+        # Validate name (allow spaces)
         if not all(char.isalpha() or char.isspace() for char in nome):
             QtWidgets.QMessageBox.warning(self, "Erro", "O nome não pode conter números ou símbolos!")
             return
