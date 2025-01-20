@@ -37,7 +37,7 @@ class ProdutosDialog(QtWidgets.QDialog):
             self.produtos_list = QtWidgets.QListWidget()
             for produto in produtos:
                 # Format: "Descrição - Largura X Espessura - Tipo da Madeira"
-                formatted_desc = f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']}"
+                formatted_desc = f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']} - R$ {produto.get('tamanho', 0):.2f}"
                 self.produtos_list.addItem(formatted_desc)
             layout.addWidget(self.produtos_list)
 
@@ -146,7 +146,7 @@ class RelatorioDialog(QtWidgets.QDialog):
         # Configuração da Tabela
         self.tabela = QtWidgets.QTableWidget()
         self.tabela.setColumnCount(6)  # Increased column count for total value
-        self.tabela.setHorizontalHeaderLabels(["PRODUTOS", "QUANTIDADE", "VALOR POR METRO", "VALOR UNITÁRIO", "VALOR TOTAL", "LUCRO"])
+        self.tabela.setHorizontalHeaderLabels(["PRODUTOS", "QUANTIDADE", "VALOR UNITÁRIO", "VALOR TOTAL", "VOLUME TOTAL", "CLIENTE"])
         self.tabela.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         self.tabela.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)  # Não permite edição
 
@@ -167,15 +167,15 @@ class RelatorioDialog(QtWidgets.QDialog):
             quantidade = produto["quantidade"]
             vlr_m = produto["vl_m"]
             total = produto["total"]
-            lucro = produto["lucro"]
+            cliente = produto.get("cliente", "N/A")
 
             # Preenche os dados na tabela
             self.tabela.setItem(row, 0, QtWidgets.QTableWidgetItem(descricao))
             self.tabela.setItem(row, 1, QtWidgets.QTableWidgetItem(str(quantidade)))
             self.tabela.setItem(row, 2, QtWidgets.QTableWidgetItem(f"R$ {vlr_m:.2f}"))  # Display value per meter
-            self.tabela.setItem(row, 3, QtWidgets.QTableWidgetItem(f"R$ {vlr_m:.2f}"))  # Display unit price (selling price)
-            self.tabela.setItem(row, 4, QtWidgets.QTableWidgetItem(f"R$ {total:.2f}"))  # Display total
-            self.tabela.setItem(row, 5, QtWidgets.QTableWidgetItem(f"R$ {lucro:.2f}"))  # Display profit
+            self.tabela.setItem(row, 3, QtWidgets.QTableWidgetItem(f"R$ {total:.2f}"))  # Display total
+            self.tabela.setItem(row, 4, QtWidgets.QTableWidgetItem(f"{produto['volume_total']:.4f} m³"))  # Display volume total
+            self.tabela.setItem(row, 5, QtWidgets.QTableWidgetItem(cliente))  # Display client name
 
 class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
     # Define a signal to notify when a sale is added
@@ -303,6 +303,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
 
         self.produto_venda = QtWidgets.QLineEdit()
         self.produto_venda.setPlaceholderText("Valor de Venda por Metro Linear")  # New field for Selling Price per Linear Meter
+        self.produto_venda.textChanged.connect(self.calcular_lucro)  # Connect to calculate profit
         layout.addWidget(self.produto_venda)
 
         self.lucro_label = QtWidgets.QLabel("Lucro: R$ 0.00")
@@ -459,10 +460,15 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         self.quantidade_entry.setPlaceholderText("Quantidade")
         layout.addWidget(self.quantidade_entry)
 
-        # New field for selling price
-        self.produto_venda = QtWidgets.QLineEdit()
-        self.produto_venda.setPlaceholderText("Valor de Venda por Metro Linear")  # New field for Selling Price per Linear Meter
-        layout.addWidget(self.produto_venda)
+        # Selling price input
+        self.venda_entry = QtWidgets.QLineEdit()
+        self.venda_entry.setPlaceholderText("Valor de Venda por Metro Linear")
+        self.venda_entry.textChanged.connect(self.calcular_lucro)  # Connect to calculate profit
+        layout.addWidget(self.venda_entry)
+
+        # Profit label
+        self.lucro_label = QtWidgets.QLabel("Lucro: R$ 0.00")
+        layout.addWidget(self.lucro_label)
 
         # Button to add product to budget
         self.btn_adicionar_orcamento = QtWidgets.QPushButton("Adicionar Produto ao Orçamento")
@@ -473,7 +479,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         # List to display added products
         self.produtos_adicionados_list = QtWidgets.QTableWidget()
         self.produtos_adicionados_list.setColumnCount(6)
-        self.produtos_adicionados_list.setHorizontalHeaderLabels(["PRODUTO", "QUANTIDADE", "VALOR POR METRO", "VALOR UNITÁRIO", "VALOR TOTAL", "LUCRO"])
+        self.produtos_adicionados_list.setHorizontalHeaderLabels(["PRODUTO", "QUANTIDADE", "VALOR POR METRO", "VALOR UNITÁRIO", "VALOR TOTAL", "LUCRO TOTAL"])
         self.produtos_adicionados_list.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
         layout.addWidget(self.produtos_adicionados_list)
 
@@ -543,14 +549,14 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
 
         # Populate the product ComboBox
         self.produto_combobox.clear()
-        self.produto_combobox.addItems([f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']}" for produto in self.produtos])
+        self.produto_combobox.addItems([f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']} - R$ {produto.get('tamanho', 0):.2f}" for produto in self.produtos])
 
     def atualizar_combobox_orcamento(self):
         self.produto_combobox.clear()
         # Add only products to the combo box for budget
         for produto in self.produtos:
             if 'descricao' in produto and 'largura' in produto and 'espessura' in produto and 'madeira' in produto:
-                produto_nome = f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']}"
+                produto_nome = f"{produto['descricao']} - {produto['largura']} X {produto['espessura']} - {produto['madeira']} - R$ {produto.get('tamanho', 0):.2f}"
                 self.produto_combobox.addItem(produto_nome)
 
     def mostrar_produtos_registrados(self):
@@ -573,7 +579,8 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
                 self.produto_largura.setText(str(produto.get("largura", "")))  # Get the width
                 self.produto_espessura.setText(str(produto.get("espessura", "")))  # Get the thickness
                 self.produto_vlr_m.setText(str(produto.get("vl_m", "")))  # Get the value per cubic meter
-                self.produto_venda.setText(str(produto.get("venda", "")))  # Get the selling price if available
+                self.produto_venda.setText(f"{produto.get('vl_venda', 0):.2f}")
+                self.produto_tamanho.setText(str(produto.get("tamanho", "")))# Get the selling price if available
                 break
 
     def delete_product(self, product_name):
@@ -625,6 +632,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         madeira = self.produto_madeira.text()
         largura = self.produto_largura.text()
         espessura = self.produto_espessura.text()
+        tamanho = self.produto_tamanho.text()
         try:
             vlr_m = float(self.produto_vlr_m.text())  # Get the cost per cubic meter
             largura = float(largura)  # Convert to float
@@ -632,13 +640,15 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
             if not descricao or vlr_m <= 0 or largura <= 0 or espessura <= 0:
                 raise ValueError("Preencha os campos corretamente!")
 
-            self.produtos.append({"descricao": descricao, "madeira": madeira, "largura": largura, "espessura": espessura, "vl_m": vlr_m})  # Store description, wood type, width, thickness, and cost
+            vlr_venda = float(self.produto_venda.text().replace(',', '.'))  # Get the selling price
+            self.produtos.append({"descricao": descricao, "madeira": madeira, "largura": largura, "espessura": espessura, "vl_m": vlr_m, "tamanho": tamanho})  # Store description, wood type, width, thickness, and selling price
             self.atualizar_combobox_orcamento()
             self.produto_desc.clear()
             self.produto_madeira.clear()
             self.produto_largura.clear()
             self.produto_espessura.clear()
             self.produto_vlr_m.clear()  # Clear cost per cubic meter input
+            self.produto_venda.clear()  # Clear selling price input
 
             self.salvar_dados()
             QtWidgets.QMessageBox.information(self, "Sucesso", "Produto adicionado com sucesso!")
@@ -700,7 +710,6 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         produto_desc = self.produto_combobox.currentText()
         produto_tam = self.produto_tamanho.text().replace(',', '.')  # Replace comma with dot for float conversion
         quantidade = self.quantidade_entry.text()
-        valor_venda = self.produto_venda.text()
 
         if not produto_desc or not produto_tam or not quantidade:
             QtWidgets.QMessageBox.warning(self, "Erro", "Preencha todos os campos para adicionar um produto ao orçamento!")
@@ -710,7 +719,6 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         try:
             produto_tam = float(produto_tam)  # Convert to float to allow decimal values
             quantidade = int(quantidade)  # Convert quantidade to int
-            valor_venda = float(valor_venda)
         except ValueError:
             QtWidgets.QMessageBox.warning(self, "Erro", "O tamanho e a quantidade devem ser números válidos!")
             return
@@ -718,53 +726,56 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         # Get the product details from the JSON data
         produto = next((p for p in self.produtos if p["descricao"] == produto_desc.split(" - ")[0]), None)  # Match only the description part
         if produto:
-            
-            valor_unitario = valor_venda * produto_tam  # Calculate the unit price based on selling price
-            total = valor_unitario * quantidade  # Calculate total based on quantity
-            
-            # Calculate profit
-            largura = produto.get("largura", 0) / 100  # Convertendo para metros
-            espessura = produto.get("espessura", 0) / 100  # Convertendo para metros
-            
-            area = largura * espessura  # Área em metros quadrados
+            try:
+                vlr_m = float(self.venda_entry.text())  # Get the selling price per meter from the input
+                valor_unitario = vlr_m * produto_tam  # Calculate the unit price based on selling price
+                total = valor_unitario * quantidade  # Calculate total based on quantity
 
-            # Calcular o volume de 1 metro linear
-            volume_linear = area * 1  # Volume em metros cúbicos para 1 metro linear
+                # Calculate profit
+                largura = produto["largura"] / 100  # Convertendo para metros
+                espessura = produto["espessura"] / 100  # Convertendo para metros
+                
+                area = largura * espessura  # Área em metros quadrados
 
-            # Calcular o custo do metro linear
-            custo_metro_linear = (produto.get("vl_m", 0) * volume_linear)  # Custo por metro linear
-            
-            # Calcular lucro
-            lucro = (valor_venda - custo_metro_linear) * produto_tam * quantidade  # Adjusted profit calculation
+                # Calcular o volume de 1 metro linear
+                volume_linear = area * 1  # Volume em metros cúbicos para 1 metro linear
 
-            # Add product details to the list
-            row_position = self.produtos_adicionados_list.rowCount()
-            self.produtos_adicionados_list.insertRow(row_position)
-            self.produtos_adicionados_list.setItem(row_position, 0, QtWidgets.QTableWidgetItem(produto_desc))
-            self.produtos_adicionados_list.setItem(row_position, 1, QtWidgets.QTableWidgetItem(str(quantidade)))
-            self.produtos_adicionados_list.setItem(row_position, 2, QtWidgets.QTableWidgetItem(f"R$ {valor_venda:.2f}"))  # Display selling price
-            self.produtos_adicionados_list.setItem(row_position, 3, QtWidgets.QTableWidgetItem(f"R$ {valor_unitario:.2f}"))  # Display unit price
-            self.produtos_adicionados_list.setItem(row_position, 4, QtWidgets.QTableWidgetItem(f"R$ {total:.2f}"))  # Display total
-            self.produtos_adicionados_list.setItem(row_position, 5, QtWidgets.QTableWidgetItem(f"R$ {lucro:.2f}"))  # Display profit
+                # Calcular o custo do metro linear
+                custo_metro_linear = (produto["vl_m"] * volume_linear)  # Custo por metro linear
+                
+                # Calcular lucro
+                lucro = (vlr_m - custo_metro_linear) * produto_tam * quantidade  # Adjusted profit calculation
 
-            self.orcamento_produtos.append({
-                "descricao": produto_desc,
-                "tamanho": produto_tam,
-                "quantidade": quantidade,
-                "valor_venda": valor_venda,
-                "total": total,
-                "lucro": lucro  # Store calculated profit
-            })
+                # Add product details to the list
+                row_position = self.produtos_adicionados_list.rowCount()
+                self.produtos_adicionados_list.insertRow(row_position)
+                self.produtos_adicionados_list.setItem(row_position, 0, QtWidgets.QTableWidgetItem(produto_desc))
+                self.produtos_adicionados_list.setItem(row_position, 1, QtWidgets.QTableWidgetItem(str(quantidade)))
+                self.produtos_adicionados_list.setItem(row_position, 2, QtWidgets.QTableWidgetItem(f"R$ {vlr_m:.2f}"))  # Display selling price
+                self.produtos_adicionados_list.setItem(row_position, 3, QtWidgets.QTableWidgetItem(f"R$ {valor_unitario:.2f}"))  # Display unit price
+                self.produtos_adicionados_list.setItem(row_position, 4, QtWidgets.QTableWidgetItem(f"R$ {total:.2f}"))  # Display total
+                self.produtos_adicionados_list.setItem(row_position, 5, QtWidgets.QTableWidgetItem(f"R$ {lucro:.2f}"))  # Display profit
 
-            # Clear inputs
-            self.produto_combobox.setCurrentIndex(-1)
-            self.produto_tamanho.clear()
-            self.quantidade_entry.clear()  # Clear quantity input
+                self.orcamento_produtos.append({
+                    "descricao": produto_desc,
+                    "tamanho": produto_tam,
+                    "quantidade": quantidade,
+                    "vl_m": vlr_m,
+                    "total": total,
+                    "lucro": lucro  # Store calculated profit
+                })
 
-            self.salvar_dados()
+                # Clear inputs
+                self.produto_combobox.setCurrentIndex(-1)
+                self.produto_tamanho.clear()
+                self.quantidade_entry.clear()  # Clear quantity input
 
-            # Emit the signal after adding a product
-            self.sale_added.emit()
+                self.salvar_dados()
+
+                # Emit the signal after adding a product
+                self.sale_added.emit()
+            except ValueError:
+                QtWidgets.QMessageBox.warning(self, "Erro", "O valor de venda por metro linear deve ser um número válido!")
         else:
             QtWidgets.QMessageBox.warning(self, "Erro", "Produto não encontrado!")
 
@@ -828,7 +839,6 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
             pdf.cell(30, 7, txt="Vlr. Seguro", border=1, align="C", fill=True)
             pdf.cell(20, 7, txt="Qtd", border=1, align="C", fill=True)  # Quantity
             pdf.cell(20, 7, txt="Vlr. M.", border=1, align="C", fill=True)  # Add "Vlr. M." column
-            pdf.cell(30, 7, txt="Vlr UN.", border=1, align="C", fill=True)  # Unit Price
             pdf.cell(30, 7, txt="Vlr Total", border=1, align="C", fill=True)  # Total
             pdf.ln()
 
@@ -839,9 +849,8 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
                 produto_desc = produto["descricao"]
                 produto_tam = produto["tamanho"]
                 quantidade = produto["quantidade"]
-                valor_venda = produto["valor_venda"]
-                valor_unitario = valor_venda * produto_tam  # Calculate unit price
-                total = int(quantidade) * valor_unitario  # Calculate total based on quantity and unit price
+                vl_m = produto["vl_m"]
+                total = produto["total"]
 
                 # Preenchendo produtos com o novo formato
                 pdf.cell(10, 7, txt=str(index + 1), border=1, align="C")
@@ -851,8 +860,7 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
                 pdf.cell(30, 7, txt="R$ 00,00", border=1, align="C")
                 pdf.cell(30, 7, txt="R$ 00,00", border=1, align="C")
                 pdf.cell(20, 7, txt=str(quantidade), border=1, align="C")  # Display quantity
-                pdf.cell(20, 7, txt=f"R$ {valor_venda:.2f}", border=1, align="C")  # Display value per meter
-                pdf.cell(30, 7, txt=f"R$ {valor_unitario:.2f}", border=1, align="C")  # Display calculated unit price
+                pdf.cell(20, 7, txt=f"R$ {vl_m:.2f}", border=1, align="C")  # Display value per meter
                 pdf.cell(30, 7, txt=f"R$ {total:.2f}", border=1, align="C")  # Display total
                 pdf.ln(10)
 
@@ -876,16 +884,6 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
             pdf.cell(30, 5, txt=f"Seguro:", border=0, align="L")
             pdf.cell(30, 5, txt=f"R$ 00.00", border=0, align="L")
             pdf.cell(30, 5, txt=f"Acréscimos:", border=0, align="L")  # Total at the end
-            pdf.cell(10, 5, txt=f"R$ 00.00", border=0, align="L")
-            pdf.ln(6)
-
-            pdf.cell(36, 5, txt=f"Condição de Pagamento:", border=0, align="L")
-            pdf.cell(10, 5, txt="", border=0)  # Espaço vazio
-            pdf.cell(30, 5, txt=f"{self.condicao_pagamento_entry.text()}", border=0, align="L")
-            pdf.cell(130, 5, txt="", border=0)  # Espaço vazio
-            pdf.cell(30, 5, txt=f"Frete:", border=0, align="L")
-            pdf.cell(30, 5, txt=f"R$ 00.00", border=0, align="L")
-            pdf.cell(30, 5, txt=f"Descontos:", border=0, align="L")  # Total at the end
             pdf.cell(10, 5, txt=f"R$ 00.00", border=0, align="L")
             pdf.ln(6)
 
@@ -959,6 +957,31 @@ class SistemaOrcamentoMadeireira(QtWidgets.QMainWindow):
         }
         with open(self.arquivo_dados, 'w') as arquivo:
             json.dump(dados, arquivo, indent=4)
+
+    def calcular_lucro(self):
+        """Calcula e exibe o lucro baseado no custo e no valor de venda."""
+        try:
+            # Get the selling price
+            vlr_venda = float(self.venda_entry.text())
+            # Get the selected product
+            produto_desc = self.produto_combobox.currentText()
+            produto = next((p for p in self.produtos if p["descricao"] == produto_desc.split(" - ")[0]), None)
+
+            if produto:
+                # Calculate cost per linear meter
+                largura = produto["largura"] / 100  # Convert to meters
+                espessura = produto["espessura"] / 100  # Convert to meters
+                area = largura * espessura  # Area in square meters
+                volume_linear = area * 1  # Volume in cubic meters for 1 linear meter
+                custo_metro_linear = produto["vl_m"] * volume_linear  # Cost per linear meter
+
+                # Calculate profit
+                lucro = vlr_venda - custo_metro_linear
+                self.lucro_label.setText(f"Lucro: R$ {lucro:.2f}")
+            else:
+                self.lucro_label.setText("Lucro: R$ 0.00")  # Reset if product not found
+        except ValueError:
+            self.lucro_label.setText("Lucro: R$ 0.00")  # Reset if input is invalid
 
 def carregar_dados_orcamento(arquivo_dados):
     """Carrega os dados de vendas do arquivo JSON."""
